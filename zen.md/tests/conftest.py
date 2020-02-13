@@ -1,6 +1,7 @@
 from unittest import mock
 from typing import Callable, List, AnyStr, Dict
 import pytest
+from tinydb import TinyDB
 
 
 @pytest.fixture
@@ -46,3 +47,11 @@ def article_html():
     return html_string
 
 
+@pytest.fixture()
+def tmp_article_json(tmp_path):
+    json_file = tmp_path/'articles.json'
+    json_file.touch()
+    db = TinyDB(str(json_file))
+    db.insert({'section': 'general', 'filename': 'getting_started.md', 'zen_id': 1})
+    db.close()
+    return json_file

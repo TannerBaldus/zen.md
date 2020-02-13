@@ -1,13 +1,51 @@
 from typing import List, AnyStr
+from dataclasses import dataclass
 
-from utils import get_filename
+from utils import get_filename, ZendMdError
 from pathlib import Path
+from local_objects import ZenMdProject, LocalArticle
+from zendesk_connection import ZenDeskClient
 
 ARTICLE_URL_TEMPLATE = '/hc/{locale}/articles/{article_id}'
 ARTICLE_ATTACHMENT_URL_TEMPLATE = '/hc/article_attachments/{article_id}/{filename}'
 
 
-def convert_article(article: 'Article'):
+@dataclass
+class ZdeskMetadata(object):
+    title: str
+    section_id: int
+    user_segment_id: int
+    permission_group_id: int
+    comments_disabled: bool = None
+    label_names: list[str] = None
+    draft: bool = None
+    promoted: bool = None
+    position: int = None
+
+
+def convert_metadata(article: LocalArticle,  zdesk_client: ZenDeskClient):
+    """
+    We want the user to be able to set the section, user_segment and permission_group of the article by name.
+    However the api expects an id, so we use the api to get the id from the name.
+    """
+    local_metadata = article.metadata
+    section_id = zdesk_client.get_section_id(local_metadata.section)
+    if not section_id:
+        raise ZendMdError()
+    user_segment_id = zdesk_client.get_user_segment_id(local_metadata.user_segment)
+    if not user_segment_id:
+        raise ZendMdError()
+    permission_group_id = zdesk_client.get_permission_group_id(local_metadata.permission_group)
+    if not permission_group_id:
+        raise ZendMdError()
+    zdesk_metadata = ZdeskMetadata(local_metadata.title, section_id, user_segment_id, permission_group_id,
+                                   local_metadata.comments_disabled, local_metadata.label_names, local_metadata.draft,
+                                   local_metadata.promoted, local_metadata.position)
+
+    return zdesk_metadata
+
+
+def convert_article_body(article: 'Article'):
     html_body = article.body
     convert_images(article, html_body)
     convert_links(article, html_body)
@@ -52,8 +90,6 @@ def convert_images(article: 'Article', soup):
     """
 
     img_tags = soup.find_all('img')
-    import pdb
-    pdb.set_trace()
     unattached_images = get_unattached_images(img_tags, article.attached_images)
 
     article.attach_images(unattached_images)
